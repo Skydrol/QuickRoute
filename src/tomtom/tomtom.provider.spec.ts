@@ -1,11 +1,11 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
-import { TomTomService } from './tomtom.service';
-import { of } from 'rxjs';
+import { TomTomProvider } from './tomtom.provider';
+import { AddressResult } from '../providers/address-provider.interface';
 import { AxiosResponse, AxiosHeaders } from 'axios';
 
-describe('TomTomService', () => {
-  let service: TomTomService;
+describe('TomTomProvider', () => {
+  let provider: TomTomProvider;
   let httpService: HttpService;
 
   beforeAll(() => {
@@ -15,31 +15,39 @@ describe('TomTomService', () => {
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
-        TomTomService,
+        TomTomProvider,
         {
           provide: HttpService,
           useValue: {
-            get: jest.fn(),
+            axiosRef: {
+              get: jest.fn(),
+            },
           },
         },
       ],
     }).compile();
 
-    service = module.get<TomTomService>(TomTomService);
+    provider = module.get<TomTomProvider>(TomTomProvider);
     httpService = module.get<HttpService>(HttpService);
   });
 
   it('should be defined', () => {
-    expect(service).toBeDefined();
+    expect(provider).toBeDefined();
   });
 
-  it('should call the TomTom API with countrySet=AU and return suggestions', async () => {
+  it('should call the TomTom API and return address suggestions', async () => {
     const mockResponse: AxiosResponse = {
       data: {
         results: [
           {
             address: {
               freeformAddress: '123 Example St, Sydney, NSW 2000, Australia',
+              country: 'Australia',
+              municipality: 'Sydney',
+            },
+            position: {
+              lat: -33.8688,
+              lon: 151.2093,
             },
           },
         ],
@@ -51,10 +59,22 @@ describe('TomTomService', () => {
         headers: new AxiosHeaders(),
       },
     };
-    jest.spyOn(httpService, 'get').mockReturnValueOnce(of(mockResponse));
-    const result = await service.getSuggestions('Example');
-    expect(result).toEqual(mockResponse.data);
-    expect(httpService.get).toHaveBeenCalledWith(
+
+    jest.spyOn(httpService.axiosRef, 'get').mockResolvedValueOnce(mockResponse);
+
+    const result: AddressResult[] = await provider.getSuggestions('Example', 5);
+
+    expect(result).toEqual([
+      {
+        address: '123 Example St, Sydney, NSW 2000, Australia',
+        country: 'Australia',
+        municipality: 'Sydney',
+        latitude: -33.8688,
+        longitude: 151.2093,
+      },
+    ]);
+
+    expect(httpService.axiosRef.get).toHaveBeenCalledWith(
       'https://api.tomtom.com/search/2/search/Example.json',
       {
         params: {
@@ -68,11 +88,8 @@ describe('TomTomService', () => {
   });
 
   it('should throw an error if the API call fails', async () => {
-    jest.spyOn(httpService, 'get').mockImplementationOnce(() => {
-      throw new Error('API error');
-    });
-    await expect(service.getSuggestions('Example')).rejects.toThrow(
-      'Failed to fetch suggestions: API error',
-    );
+    jest.spyOn(httpService.axiosRef, 'get').mockRejectedValueOnce(new Error('API error'));
+
+    await expect(provider.getSuggestions('Example', 5)).rejects.toThrow('API error');
   });
 });

@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { AppController } from './app.controller';
-import { AppService } from './app.service';
-import { TomTomModule } from './tomtom/tomtom.module';
+import { AppService } from './services/app.service';
+import { TomTomModule } from './address/address.module';
 import { ConfigModule } from '@nestjs/config';
 
 @Module({
